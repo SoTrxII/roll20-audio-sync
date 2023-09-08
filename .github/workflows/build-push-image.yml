@@ -29,6 +29,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/live-audio-mixer:${{ steps.define_env.outputs.tag }}
+          tags: ${{ secrets.DOCKER_USERNAME }}/roll20-audio-sync:${{ steps.define_env.outputs.tag }}
           secrets: |
             GIT_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
