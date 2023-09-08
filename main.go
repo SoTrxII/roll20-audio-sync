@@ -27,19 +27,17 @@ func main() {
 	}
 
 	// Dapr client
-	daprPort := 50007
-	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_HTTP_PORT"), 10, 32); err != nil && envPort != 0 {
+	daprPort := 50001
+	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err == nil && envPort != 0 {
 		daprPort = int(envPort)
 	}
-	if daprPort == 0 {
-		slog.Warn("[Main] No dapr DAPR_GRPC_PORT provided, Dapr seems not to be running !")
-	}
+	slog.Info("[Main] :: Dapr port is " + strconv.Itoa(daprPort))
 	daprMixerId := os.Getenv("MIXER_APP_ID")
 	if daprMixerId == "" {
 		daprMixerId = DEFAULT_MIXER_DID
 	}
 	appPort := DEFAULT_APP_PORT
-	if envPort, err := strconv.ParseInt(os.Getenv("APP_PORT"), 10, 32); err != nil && envPort != 0 {
+	if envPort, err := strconv.ParseInt(os.Getenv("APP_PORT"), 10, 32); err == nil && envPort != 0 {
 		appPort = int(envPort)
 	}
 
