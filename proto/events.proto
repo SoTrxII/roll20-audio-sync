@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+option go_package = "./jukebox-syncer";
+package events;
+
+enum EventType {
+  UNSPECIFIED = 0;
+  PLAY = 1;
+  PAUSE = 2;
+  RESUME = 3;
+  STOP = 4;
+  SEEK = 5;
+  VOLUME = 6;
+  OTHER = 7;
+}
+
+// Event message definition.
+message Event {
+  string recordId = 1;
+  string evtId = 2;
+  EventType type = 3;
+  // Also asset ID
+  string assetUrl = 4;
+  bool loop = 5;
+}
+
+message EventReply {
+  string Message = 1;
+}
+
+message RecordRequest {
+  string id = 1;
+}
+
+message RecordReply {
+  string Message = 1;
+
+
+}
+
+message StopRequest {
+  string id = 1;
+}
+message StopReply  {
+  string Message = 1;
+
+}
+
+
+service EventStream {
+  // Stream of events.
+  rpc StreamEvents(stream Event) returns (EventReply) ;
+  rpc Start(RecordRequest) returns (RecordReply);
+  rpc Stop(StopRequest) returns (StopReply);
+}

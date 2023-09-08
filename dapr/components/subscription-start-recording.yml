@@ -1,0 +1,10 @@
+apiVersion: dapr.io/v1alpha1
+kind: Subscription
+metadata:
+  name: r20-audio-start
+spec:
+  topic: r20-audio-start
+  route: /v1/start
+  pubsubname: message-queue
+scopes:
+  - r20-audio-bouncer
