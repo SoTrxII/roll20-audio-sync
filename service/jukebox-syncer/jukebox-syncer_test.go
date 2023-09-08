@@ -11,9 +11,24 @@ func TestJukeboxSyncer_HandleStateIsNil(t *testing.T) {
 	err := s.Handle(nil)
 	assert.Error(t, err)
 }
-func TestJukeboxSyncer_HandleFirstState(t *testing.T) {
+func TestJukeboxSyncer_HandleStateBeforeStartError(t *testing.T) {
 	s := NewJukeboxSyncer(&mockMixer{})
 	err := s.Handle(&R20State{
+		Tracks: []R20Track{
+			{
+				Url:     "a",
+				Playing: true,
+			},
+		},
+	})
+	assert.Error(t, err)
+}
+func TestJukeboxSyncer_HandleFirstState(t *testing.T) {
+	s := NewJukeboxSyncer(&mockMixer{})
+	err := s.Start("1")
+	assert.NoError(t, err)
+	err = s.Handle(&R20State{
+		Rid: "1",
 		Tracks: []R20Track{
 			{
 				Url:     "a",
@@ -25,7 +40,10 @@ func TestJukeboxSyncer_HandleFirstState(t *testing.T) {
 }
 func TestJukeboxSyncer_HandleStateDelta(t *testing.T) {
 	s := NewJukeboxSyncer(&mockMixer{})
-	err := s.Handle(&R20State{
+	err := s.Start("1")
+	assert.NoError(t, err)
+	err = s.Handle(&R20State{
+		Rid: "1",
 		Tracks: []R20Track{
 			{
 				Url:     "a",
@@ -35,6 +53,7 @@ func TestJukeboxSyncer_HandleStateDelta(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	err = s.Handle(&R20State{
+		Rid: "1",
 		Tracks: []R20Track{
 			{
 				Url:     "a",
