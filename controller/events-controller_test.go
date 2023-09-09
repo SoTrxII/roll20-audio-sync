@@ -33,14 +33,12 @@ var (
 
 func TestEventController_HandleBadRequest(t *testing.T) {
 	mockHandler := mockStateHandler{}
-	mockHandler.On("Handle", mock.Anything).Return(nil)
 	ctrl := NewEventController(&mockHandler)
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	//setJsonAsBody(t, c, sampleState)
 	ctrl.Handle(c)
-	mockHandler.AssertExpectations(t)
+	mockHandler.AssertNotCalled(t, "Handle", mock.Anything)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -72,14 +70,12 @@ func TestEventController_HandleError(t *testing.T) {
 
 func TestEventController_StartBadRequest(t *testing.T) {
 	mockHandler := mockStateHandler{}
-	mockHandler.On("Start", mock.Anything).Return(nil)
 	ctrl := NewEventController(&mockHandler)
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	//setJsonAsBody(t, c, sampleState)
 	ctrl.Start(c)
-	mockHandler.AssertExpectations(t)
+	mockHandler.AssertNotCalled(t, "Start", mock.Anything)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -111,14 +107,12 @@ func TestEventController_StartError(t *testing.T) {
 
 func TestEventController_StopBadRequest(t *testing.T) {
 	mockHandler := mockStateHandler{}
-	mockHandler.On("Stop", mock.Anything).Return(nil)
 	ctrl := NewEventController(&mockHandler)
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	//setJsonAsBody(t, c, sampleState)
 	ctrl.Stop(c)
-	mockHandler.AssertExpectations(t)
+	mockHandler.AssertNotCalled(t, "Stop", mock.Anything)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
