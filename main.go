@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -41,8 +42,11 @@ func main() {
 		appPort = int(envPort)
 	}
 
+	mainCtx, cancel := context.WithCancel(context.Background())
+	// Graceful shutdown
+	defer cancel()
 	// Initialize controllers
-	evtCtrl, err := DI(fmt.Sprintf("localhost:%d", daprPort), daprMixerId)
+	evtCtrl, err := DI(mainCtx, fmt.Sprintf("localhost:%d", daprPort), daprMixerId)
 	if err != nil {
 		panic(fmt.Errorf("failed to initialize event controller: %w", err))
 	}
@@ -80,8 +84,8 @@ func main() {
 	}
 }
 
-func DI(daprAddress, mixerId string) (*controller.EventController, error) {
-	mixerApi, err := mixer_client.NewMixerClient(daprAddress, mixerId)
+func DI(ctx context.Context, daprAddress, mixerId string) (*controller.EventController, error) {
+	mixerApi, err := mixer_client.NewMixerClient(ctx, daprAddress, mixerId)
 	if err != nil {
 		return nil, err
 	}

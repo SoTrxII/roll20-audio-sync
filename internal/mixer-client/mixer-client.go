@@ -16,17 +16,16 @@ type MixerClient struct {
 	streams map[string]pb.EventStream_StreamEventsClient
 }
 
-func NewMixerClient(address, daprMixerAppId string) (*MixerClient, error) {
+func NewMixerClient(ctx context.Context, address, daprMixerAppId string) (*MixerClient, error) {
 	dialCtx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-
 	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "dapr-app-id", daprMixerAppId)
-	ctx = metadata.AppendToOutgoingContext(ctx, "dapr-stream", "true")
+	methodCtx := metadata.AppendToOutgoingContext(ctx, "dapr-app-id", daprMixerAppId)
+	methodCtx = metadata.AppendToOutgoingContext(methodCtx, "dapr-stream", "true")
 	client := pb.NewEventStreamClient(conn)
-	return &MixerClient{client: client, ctx: ctx, streams: map[string]pb.EventStream_StreamEventsClient{}}, nil
+	return &MixerClient{client: client, ctx: methodCtx, streams: map[string]pb.EventStream_StreamEventsClient{}}, nil
 }
 
 func (mc *MixerClient) Start(id string) error {
