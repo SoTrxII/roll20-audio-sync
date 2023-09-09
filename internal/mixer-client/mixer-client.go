@@ -11,9 +11,9 @@ import (
 )
 
 type MixerClient struct {
-	client pb.EventStreamClient
-	ctx    context.Context
-	stream pb.EventStream_StreamEventsClient
+	client  pb.EventStreamClient
+	ctx     context.Context
+	streams map[string]pb.EventStream_StreamEventsClient
 }
 
 func NewMixerClient(address, daprMixerAppId string) (*MixerClient, error) {
@@ -26,8 +26,7 @@ func NewMixerClient(address, daprMixerAppId string) (*MixerClient, error) {
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "dapr-app-id", daprMixerAppId)
 	ctx = metadata.AppendToOutgoingContext(ctx, "dapr-stream", "true")
 	client := pb.NewEventStreamClient(conn)
-	//_ = client
-	return &MixerClient{client: client, ctx: ctx}, nil
+	return &MixerClient{client: client, ctx: ctx, streams: map[string]pb.EventStream_StreamEventsClient{}}, nil
 }
 
 func (mc *MixerClient) Start(id string) error {
@@ -35,12 +34,15 @@ func (mc *MixerClient) Start(id string) error {
 	if err != nil {
 		return err
 	}
-	// Also start the event stream
-	if mc.stream == nil {
-		mc.stream, err = mc.client.StreamEvents(mc.ctx)
+
+	// Create a new stream for this record
+	_, ok := mc.streams[id]
+	if !ok {
+		stream, err := mc.client.StreamEvents(mc.ctx)
 		if err != nil {
 			return err
 		}
+		mc.streams[id] = stream
 	}
 	return nil
 }
@@ -50,34 +52,29 @@ func (mc *MixerClient) Stop(id string) error {
 	if err != nil {
 		return err
 	}
-	if mc.stream != nil {
-		err = mc.stream.CloseSend()
+
+	// Close this record stream
+	stream, ok := mc.streams[id]
+	if ok {
+		err = stream.CloseSend()
 		if err != nil {
 			return err
 		}
+		delete(mc.streams, id)
 	}
 	return nil
-}
-
-func (mc *MixerClient) initStream() (pb.EventStream_StreamEventsClient, error) {
-	stream, err := mc.client.StreamEvents(mc.ctx)
-	if err != nil {
-		return nil, err
-	}
-	return stream, nil
 }
 
 func (mc *MixerClient) Send(evt *pb.Event) error {
 	var err error
-	if mc.stream == nil {
-		mc.stream, err = mc.client.StreamEvents(mc.ctx)
+	stream, ok := mc.streams[evt.RecordId]
+	if !ok {
+		stream, err = mc.client.StreamEvents(mc.ctx)
 		if err != nil {
 			return err
 		}
+		mc.streams[evt.RecordId] = stream
 	}
-	err = mc.stream.Send(evt)
-	if err != nil {
-		return err
-	}
-	return nil
+	err = stream.Send(evt)
+	return err
 }
