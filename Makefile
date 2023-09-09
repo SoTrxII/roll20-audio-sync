@@ -1,6 +1,6 @@
 .PHONY: run dapr test proto
 
-run:
+dapr_run:
 	dapr run --app-id=r20-audio-bouncer --app-port 8080 --dapr-grpc-port 50007 --resources-path ./dapr/components -- go run main.go
 
 dapr:
