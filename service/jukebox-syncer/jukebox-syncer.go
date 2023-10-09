@@ -71,5 +71,6 @@ func (es *JukeboxSyncer) Stop(id string) error {
 		return err
 	}
 	delete(es.startedMap, id)
+	delete(es.stateMap, id)
 	return nil
 }
