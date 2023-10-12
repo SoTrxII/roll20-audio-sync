@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	pb "roll20-audio-bouncer/proto"
+	"sync"
 )
 
 type JukeboxSyncer struct {
@@ -12,6 +13,7 @@ type JukeboxSyncer struct {
 	stateMap map[string]*R20State
 	// Which record have already started, by ID
 	startedMap map[string]bool
+	mu         sync.Mutex
 }
 
 func NewJukeboxSyncer(mixer MixerAPI) *JukeboxSyncer {
@@ -19,10 +21,13 @@ func NewJukeboxSyncer(mixer MixerAPI) *JukeboxSyncer {
 		mixer:      mixer,
 		stateMap:   map[string]*R20State{},
 		startedMap: map[string]bool{},
+		mu:         sync.Mutex{},
 	}
 }
 
 func (es *JukeboxSyncer) Start(id string) error {
+	es.mu.Lock()
+	defer es.mu.Unlock()
 	// Send start signal to live audio mixer
 	err := es.mixer.Start(id)
 	if err != nil {
@@ -33,6 +38,8 @@ func (es *JukeboxSyncer) Start(id string) error {
 }
 
 func (es *JukeboxSyncer) Handle(new *R20State) error {
+	es.mu.Lock()
+	defer es.mu.Unlock()
 	if new == nil {
 		return fmt.Errorf("New state is nil")
 	}
@@ -65,6 +72,8 @@ func (es *JukeboxSyncer) Handle(new *R20State) error {
 }
 
 func (es *JukeboxSyncer) Stop(id string) error {
+	es.mu.Lock()
+	defer es.mu.Unlock()
 	// Send stop signal to live audio mixer, get the storage key and get it back to the message bus
 	err := es.mixer.Stop(id)
 	if err != nil {
