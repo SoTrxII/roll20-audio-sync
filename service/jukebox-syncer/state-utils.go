@@ -2,6 +2,7 @@ package jukebox_syncer
 
 import (
 	"fmt"
+	"math"
 	pb "roll20-audio-bouncer/proto"
 )
 
@@ -86,7 +87,29 @@ func trackDelta(old, new *R20Track, rId string) []*pb.Event {
 		events = append(events, makeEvent(new, pb.EventType_OTHER, rId))
 	}
 
+	// Fourth case, the track is the same, but the volume changed
+	if new.Volume != old.Volume {
+		evt := makeEvent(new, pb.EventType_VOLUME, rId)
+		evt.VolumeDeltaDb = computeVolumeDb(old.Volume/100, new.Volume/100)
+		events = append(events, evt)
+	}
+
 	return events
+}
+
+// Provided two volume values from 0.001 to 1, compute the difference in decibels
+// Any value out of the range will be clamped to the closest bound
+func computeVolumeDb(old, new float64) float64 {
+	// 20 * log_10(1.0E-3/0.01) = -60, which is the minimum volume
+	// As we approach 0, log approaches -inf, so we clamp the value to -60
+	// When user is setting the volume to 0, he wants to mute the track
+	const lower = 1.0e-3
+	// 20 * log_10(1/0.001) = 60, which is the maximum volume
+	const upper = 1
+	cOld := math.Max(lower, math.Min(upper, old))
+	cNew := math.Max(lower, math.Min(upper, new))
+
+	return 20 * math.Log10(cNew/cOld)
 }
 
 func makeEvent(track *R20Track, t pb.EventType, rId string) *pb.Event {
@@ -96,5 +119,7 @@ func makeEvent(track *R20Track, t pb.EventType, rId string) *pb.Event {
 		Type:     t,
 		AssetUrl: track.Url,
 		Loop:     track.Loop,
+		// Roll20 doesn't play track at full volume by default
+		VolumeDeltaDb: computeVolumeDb(1, track.Volume/100),
 	}
 }

@@ -1,6 +1,7 @@
 package jukebox_syncer
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	pb "roll20-audio-bouncer/proto"
 	"testing"
@@ -150,4 +151,39 @@ func TestScanForPlay_TrackPlaying(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, evts, 1)
 	assert.True(t, evts[0].Type == pb.EventType_PLAY, "expected play event")
+}
+
+func TestComputeVolumeDb_Zero(t *testing.T) {
+	val := computeVolumeDb(0, 0)
+	assert.Zero(t, val)
+}
+
+func TestComputeVolumeDb_Mute(t *testing.T) {
+	val := computeVolumeDb(1, 0)
+	assert.Equal(t, -60.0, val)
+}
+func TestComputeVolumeDb_Full(t *testing.T) {
+	val := computeVolumeDb(0, 1)
+	assert.Equal(t, 60.0, val)
+}
+
+func TestComputeVolumeDb_Clamping(t *testing.T) {
+	val := computeVolumeDb(-52, 99884)
+	assert.Equal(t, 60.0, val)
+}
+
+func TestComputeVolumeDb_MuteAndBack(t *testing.T) {
+	val := computeVolumeDb(1, 0)
+	fmt.Println(val)
+	assert.Equal(t, -60.0, val)
+	val = computeVolumeDb(0, 0.01)
+	fmt.Println(val)
+	val = computeVolumeDb(0.01, 1)
+	fmt.Println(val)
+}
+
+func FuzzComputeVolumeDb(f *testing.F) {
+	f.Fuzz(func(t *testing.T, old, new float64) {
+		computeVolumeDb(old, new)
+	})
 }

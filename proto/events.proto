@@ -22,6 +22,8 @@ message Event {
   // Also asset ID
   string assetUrl = 4;
   bool loop = 5;
+  // Volume change in decibels
+  double volumeDeltaDb = 6;
 }
 
 message EventReply {
