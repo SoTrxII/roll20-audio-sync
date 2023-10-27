@@ -105,7 +105,7 @@ func trackDelta(old, new *R20Track, rId string) []*pb.Event {
 	if new.Playing && old.Playing && new.Progress != old.Progress {
 		if d, err := parseDuration(new.Duration); err == nil {
 			evt := makeEvent(new, pb.EventType_SEEK, rId)
-			evt.SeekPositionSec = int64(d.Seconds() * new.Progress)
+			evt.SeekPositionSec = int64(d.Seconds() * math.Min(new.Progress, 1))
 			events = append(events, evt)
 		} else {
 			slog.Warn(fmt.Sprintf("[Jukebox syncer] :: Ignoring SEEK event, error while parsing seek pos %s : %v", new.Duration, err))
