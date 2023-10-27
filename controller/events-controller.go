@@ -68,7 +68,7 @@ func (ec *EventController) Handle(c *gin.Context) {
 		c.String(http.StatusBadRequest, `invalid body provided: %s !`, err.Error())
 		return
 	}
-	slog.Info(fmt.Sprintf("[evt controller] :: processing %v", target))
+	slog.Info(fmt.Sprintf("[evt controller] :: processing %+v", target))
 	if err := ec.syncer.Handle(&target); err != nil {
 		slog.Error(fmt.Sprintf("[evt controller] :: while processing %v : %s", target, err))
 	}
