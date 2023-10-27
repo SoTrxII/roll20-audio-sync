@@ -12,6 +12,9 @@ type R20Track struct {
 	Loop    bool    `json:"loop" binding:"required"`
 	Playing bool    `json:"playing" binding:"required"`
 	Volume  float64 `json:"volume" binding:"required"`
+	// Roll20 uses an identifier to check for seek position changes
+	Progress float64 `json:"progress" binding:"required"`
+	Duration string  `json:"duration" binding:"required"`
 }
 
 type R20State struct {

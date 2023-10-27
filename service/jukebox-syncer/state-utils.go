@@ -2,8 +2,12 @@ package jukebox_syncer
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	pb "roll20-audio-bouncer/proto"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func findMatching(old *R20State, url string) *R20Track {
@@ -66,7 +70,7 @@ func trackDelta(old, new *R20Track, rId string) []*pb.Event {
 	// This should not happen unless we missed an event
 	if old == nil {
 		if new.Playing {
-			// TODO :: Handle seek
+			// TODO :: Handle initial seek
 			events = append(events, makeEvent(new, pb.EventType_PLAY, rId))
 		}
 		// As old is nil, we can't compare anything else
@@ -94,6 +98,20 @@ func trackDelta(old, new *R20Track, rId string) []*pb.Event {
 		events = append(events, evt)
 	}
 
+	// Fifth case, the track is the same, but the seek position changed
+	// Roll20 is doing this in a weird way
+	// When the user seek into a track, the progress changes, but not the actual position, which is updated later
+	// To properly get the new position, we must multiply the progress percentage by the duration
+	if new.Playing && old.Playing && new.Progress != old.Progress {
+		if d, err := parseDuration(new.Duration); err == nil {
+			evt := makeEvent(new, pb.EventType_SEEK, rId)
+			evt.SeekPositionSec = int64(d.Seconds() * new.Progress)
+			events = append(events, evt)
+		} else {
+			slog.Warn(fmt.Sprintf("[Jukebox syncer] :: Ignoring SEEK event, error while parsing seek pos %s : %v", new.Duration, err))
+		}
+	}
+
 	return events
 }
 
@@ -110,6 +128,26 @@ func computeVolumeDb(old, new float64) float64 {
 	cNew := math.Max(lower, math.Min(upper, new))
 
 	return 20 * math.Log10(cNew/cOld)
+}
+
+// Parse either a number of seconds, a mm:ss or hh:mm:ss string into a duration
+func parseDuration(s string) (time.Duration, error) {
+	d, err := strconv.Atoi(s)
+	if err == nil {
+		return time.Second * time.Duration(d), nil
+	}
+	parts := strings.Split(s, ":")
+	if len(parts) == 2 {
+		min, _ := strconv.Atoi(parts[0])
+		sec, _ := strconv.Atoi(parts[1])
+		return time.Duration(min)*time.Minute + time.Duration(sec)*time.Second, nil
+	} else if len(parts) == 3 {
+		hr, _ := strconv.Atoi(parts[0])
+		min, _ := strconv.Atoi(parts[1])
+		sec, _ := strconv.Atoi(parts[2])
+		return time.Duration(hr)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second, nil
+	}
+	return 0, fmt.Errorf("invalid format")
 }
 
 func makeEvent(track *R20Track, t pb.EventType, rId string) *pb.Event {

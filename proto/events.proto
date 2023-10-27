@@ -24,6 +24,8 @@ message Event {
   bool loop = 5;
   // Volume change in decibels
   double volumeDeltaDb = 6;
+  // Seek position in seconds
+  int64 seekPositionSec = 7;
 }
 
 message EventReply {

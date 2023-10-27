@@ -182,6 +182,56 @@ func TestComputeVolumeDb_MuteAndBack(t *testing.T) {
 	fmt.Println(val)
 }
 
+func TestParseDuration_Invalid(t *testing.T) {
+	_, err := parseDuration("a")
+	assert.Error(t, err)
+}
+
+func TestParseDuration_Valid(t *testing.T) {
+	d, err := parseDuration("1")
+	assert.NoError(t, err)
+	assert.Equal(t, 1*time.Second, d)
+	d, err = parseDuration("01")
+	assert.NoError(t, err)
+	assert.Equal(t, 1*time.Second, d)
+}
+
+func TestParseDuration_mmss(t *testing.T) {
+	d, err := parseDuration("1:23")
+	assert.NoError(t, err)
+	assert.Equal(t, 83*time.Second, d)
+	d, err = parseDuration("01:23")
+	assert.NoError(t, err)
+	assert.Equal(t, 83*time.Second, d)
+	d, err = parseDuration("01:03")
+	assert.NoError(t, err)
+	assert.Equal(t, 63*time.Second, d)
+	d, err = parseDuration("01:3")
+	assert.NoError(t, err)
+	assert.Equal(t, 63*time.Second, d)
+}
+
+func TestParseDuration_hhmmss(t *testing.T) {
+	d, err := parseDuration("1:23:45")
+	assert.NoError(t, err)
+	assert.Equal(t, 5025*time.Second, d)
+	d, err = parseDuration("01:23:45")
+	assert.NoError(t, err)
+	assert.Equal(t, 5025*time.Second, d)
+	d, err = parseDuration("01:03:45")
+	assert.NoError(t, err)
+	assert.Equal(t, 3825*time.Second, d)
+	d, err = parseDuration("01:3:45")
+	assert.NoError(t, err)
+	assert.Equal(t, 3825*time.Second, d)
+	d, err = parseDuration("01:3:5")
+	assert.NoError(t, err)
+	assert.Equal(t, 3785*time.Second, d)
+	d, err = parseDuration("1:3:5")
+	assert.NoError(t, err)
+	assert.Equal(t, 3785*time.Second, d)
+}
+
 func FuzzComputeVolumeDb(f *testing.F) {
 	f.Fuzz(func(t *testing.T, old, new float64) {
 		computeVolumeDb(old, new)
