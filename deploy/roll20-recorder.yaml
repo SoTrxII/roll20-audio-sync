@@ -1,0 +1,27 @@
+version: 1
+apps:
+  - appID: roll20-audio-sync
+    appDirPath: ..
+    appPort: 50302
+    appProtocol: http
+    env:
+      APP_PORT: 50302
+    # Kubernetes only values
+    containerImage: "docker.io/sotrx/roll20-audio-sync:0.3.1"
+    createService: true
+    # Local only
+    command: ["go","run", "main.go"]
+
+
+  - appID: live-audio-mixer
+    appDirPath: ../../live-audio-mixer
+    appPort: 50303
+    appProtocol: grpc
+    env:
+      DAPR_MAX_REQUEST_SIZE_MB: 500
+      SERVER_PORT: 50303
+    # Kubernetes only values
+    containerImage: "docker.io/sotrx/live-audio-mixer:0.8.1"
+    daprHTTPMaxRequestSize: 500
+    # Local only
+    command: ["go","run", "cmd/server.go"]
