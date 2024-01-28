@@ -1,10 +1,10 @@
 .PHONY: run dapr test proto
 
 dapr_run:
-	dapr run  --app-id=r20-audio-bouncer --app-port 50302 --dapr-grpc-port 50001 --resources-path ./dapr/components -- go run main.go
+	dapr run  --app-id=r20-audio-bouncer --app-port 50302 --dapr-grpc-port 50001 --resources-path ./.dapr/resources -- go run main.go
 
 dapr:
-	dapr run --app-id=r20-audio-bouncer --app-port 50302 --dapr-grpc-port 50001  --resources-path ./dapr/components
+	dapr run --app-id=r20-audio-bouncer --app-port 50302 --dapr-grpc-port 50001  --resources-path ./.dapr/resources
 test:
 	go test -v ./... -covermode=atomic -coverprofile=coverage.out
 
