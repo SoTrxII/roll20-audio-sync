@@ -28,4 +28,4 @@ then
   "mc alias set myminio http://localhost:9000 minioadmin minioadmin && mc mb myminio/recordings"
 fi
 
-dapr run -f "$DIR/roll20-recorder.yaml"
+cd "$DIR/.." && make dapr_run

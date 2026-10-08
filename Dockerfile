@@ -16,6 +16,8 @@ RUN apk add upx && \
 FROM alpine as release
 # The runtime user, having no home dir nor password
 RUN adduser -HD -s /bin/ash appuser
+# Mixes the captured segments onto the Discord timeline at /stop
+RUN apk add --no-cache ffmpeg
 
 WORKDIR /app
 # Copy the built app, only allowing our app user to execute it

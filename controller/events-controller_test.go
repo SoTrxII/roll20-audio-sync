@@ -2,171 +2,80 @@ package controller
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"net/http"
 	"net/http/httptest"
-	jukebox_syncer "roll20-audio-bouncer/service/jukebox-syncer"
+	"roll20-audio-bouncer/service/capture"
 	"testing"
-	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 )
 
-var (
-	sampleState = jukebox_syncer.R20State{
-		Rid:  "1",
-		Uid:  "2",
-		Date: time.Now(),
-		Tracks: []jukebox_syncer.R20Track{
-			{
-				Url:     "a",
-				Playing: true,
-			},
-		},
+type fakeCapturer struct {
+	startErr, chunkErr, stopErr error
+	gotAlignTo                  int64
+	gotChunk                    []byte
+}
+
+func (f *fakeCapturer) Start(_ string, alignTo int64) error {
+	f.gotAlignTo = alignTo
+	return f.startErr
+}
+func (f *fakeCapturer) IsRecording(string) bool { return true }
+func (f *fakeCapturer) Chunk(_ string, _, _ int, _ int64, data []byte) error {
+	f.gotChunk = data
+	return f.chunkErr
+}
+func (f *fakeCapturer) Stop(id string) (string, error) { return id + ".ogg", f.stopErr }
+
+func serve(f *fakeCapturer, method, url string, body []byte) *httptest.ResponseRecorder {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	cc := NewCaptureController(f)
+	r.POST("/start", cc.Start)
+	r.POST("/stop", cc.Stop)
+	r.POST("/chunk/:id", cc.Chunk)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(method, url, bytes.NewReader(body)))
+	return w
+}
+
+func TestStart_PassesAlignmentAndRefusesDuplicates(t *testing.T) {
+	f := &fakeCapturer{}
+	assert.Equal(t, http.StatusAccepted, serve(f, "POST", "/start", []byte(`{"id":"1","alignTo":1234}`)).Code)
+	assert.Equal(t, int64(1234), f.gotAlignTo)
+
+	// record-orchestrator before alignTo existed
+	assert.Equal(t, http.StatusAccepted, serve(f, "POST", "/start", []byte(`{"id":"1"}`)).Code)
+
+	f.startErr = capture.ErrAlreadyRecording
+	assert.Equal(t, http.StatusConflict, serve(f, "POST", "/start", []byte(`{"id":"1"}`)).Code)
+	assert.Equal(t, http.StatusBadRequest, serve(f, "POST", "/start", []byte(`{}`)).Code)
+}
+
+func TestStop_NothingCapturedIsNotFound(t *testing.T) {
+	f := &fakeCapturer{}
+	w := serve(f, "POST", "/stop", []byte(`{"id":"1"}`))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"key":"1.ogg"}`, w.Body.String())
+
+	f.stopErr = capture.ErrNoAudio
+	assert.Equal(t, http.StatusNotFound, serve(f, "POST", "/stop", []byte(`{"id":"1"}`)).Code)
+}
+
+func TestChunk_StatusTellsLullabyWhatToDo(t *testing.T) {
+	const ok = "/chunk/1?seg=0&seq=0&startedAt=5"
+	f := &fakeCapturer{}
+	assert.Equal(t, http.StatusNoContent, serve(f, "POST", ok, []byte("opus")).Code)
+	assert.Equal(t, "opus", string(f.gotChunk))
+
+	for _, bad := range []string{"/chunk/1?seq=0&startedAt=5", "/chunk/1?seg=-1&seq=0&startedAt=5", "/chunk/1?seg=0&seq=x&startedAt=5"} {
+		assert.Equal(t, http.StatusBadRequest, serve(f, "POST", bad, nil).Code, bad)
 	}
-	sampleRecPayload = jukebox_syncer.RecPayload{
-		Id: "1",
-	}
-)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, serve(f, "POST", ok, make([]byte, maxChunkBytes+1)).Code)
 
-func TestEventController_HandleBadRequest(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	ctrl.Handle(c)
-	mockHandler.AssertNotCalled(t, "Handle", mock.Anything)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestEventController_HandleOkRequest(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	mockHandler.On("Handle", mock.Anything).Return(nil)
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	setJsonAsBody(t, c, sampleState)
-	ctrl.Handle(c)
-	mockHandler.AssertExpectations(t)
-	assert.Equal(t, http.StatusAccepted, w.Code)
-}
-
-func TestEventController_HandleError(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	mockHandler.On("Handle", mock.Anything).Return(fmt.Errorf("Test"))
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	setJsonAsBody(t, c, sampleState)
-	ctrl.Handle(c)
-	mockHandler.AssertExpectations(t)
-	assert.Equal(t, http.StatusAccepted, w.Code)
-}
-
-func TestEventController_StartBadRequest(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	ctrl.Start(c)
-	mockHandler.AssertNotCalled(t, "Start", mock.Anything)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestEventController_StartOkRequest(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	mockHandler.On("Start", mock.Anything).Return(nil)
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	setJsonAsBody(t, c, sampleRecPayload)
-	ctrl.Start(c)
-	mockHandler.AssertExpectations(t)
-	assert.Equal(t, http.StatusAccepted, w.Code)
-}
-
-func TestEventController_StartError(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	mockHandler.On("Start", mock.Anything).Return(fmt.Errorf("Test"))
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	setJsonAsBody(t, c, sampleRecPayload)
-	ctrl.Start(c)
-	mockHandler.AssertExpectations(t)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestEventController_StopBadRequest(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	ctrl.Stop(c)
-	mockHandler.AssertNotCalled(t, "Stop", mock.Anything)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestEventController_StopOkRequest(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	mockHandler.On("Stop", mock.Anything).Return(nil)
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	setJsonAsBody(t, c, sampleRecPayload)
-	ctrl.Stop(c)
-	mockHandler.AssertExpectations(t)
-	assert.Equal(t, http.StatusAccepted, w.Code)
-}
-
-func TestEventController_StopError(t *testing.T) {
-	mockHandler := mockStateHandler{}
-	mockHandler.On("Stop", mock.Anything).Return(fmt.Errorf("Test"))
-	ctrl := NewEventController(&mockHandler)
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	setJsonAsBody(t, c, sampleRecPayload)
-	ctrl.Stop(c)
-	mockHandler.AssertExpectations(t)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-// Set the payload as the JSON body of c
-func setJsonAsBody(t *testing.T, c *gin.Context, payload any) {
-	buf, err := json.Marshal(payload)
-	if err != nil {
-		fmt.Println(err)
-		t.Fatal(err)
-	}
-	c.Request, _ = http.NewRequest("POST", "/", bytes.NewBuffer(buf))
-	c.Request.Header.Set("Content-Type", "application/json")
-}
-
-type mockStateHandler struct {
-	mock.Mock
-}
-
-func (m *mockStateHandler) Handle(r *jukebox_syncer.R20State) error {
-	args := m.Called(r)
-	return args.Error(0)
-}
-
-func (m *mockStateHandler) Start(id string) error {
-	args := m.Called(id)
-	return args.Error(0)
-}
-func (m *mockStateHandler) Stop(id string) error {
-	args := m.Called(id)
-	return args.Error(0)
+	f.chunkErr = capture.ErrNotRecording
+	assert.Equal(t, http.StatusConflict, serve(f, "POST", ok, nil).Code, "stop capturing")
+	f.chunkErr = capture.ErrOutOfOrder
+	assert.Equal(t, http.StatusBadRequest, serve(f, "POST", ok, nil).Code, "start a new segment")
 }
