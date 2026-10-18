@@ -213,6 +213,16 @@ func (r *Recorder) Stop(id string) (string, error) {
 		if err := s.file.Close(); err != nil {
 			return "", err
 		}
+		// A segment whose chunks were all empty has nothing to mix, and ffmpeg
+		// refuses an empty input ("End of file"), failing the whole mix and
+		// with it every other segment's music. Seen on the VPS with a client
+		// that posted empty bodies; Lullaby skips empty chunks, others may not
+		if info, err := os.Stat(s.file.Name()); err != nil {
+			return "", err
+		} else if info.Size() == 0 {
+			slog.Warn(fmt.Sprintf("[Capture] :: %s : segment %d is empty, left out", id, n))
+			continue
+		}
 		segs = append(segs, placedSegment{path: s.file.Name(), n: n, startedAt: s.startedAt, video: s.video})
 	}
 	if len(segs) == 0 {

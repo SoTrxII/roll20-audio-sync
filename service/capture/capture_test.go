@@ -300,3 +300,31 @@ func TestStop_FallsBackToTheJukeboxAlone(t *testing.T) {
 	assert.Equal(t, "42.ogg", key)
 	assert.Equal(t, []string{"42.ogg"}, up.keys)
 }
+
+// A segment that only got empty chunks is left out of the mix instead of
+// failing it: ffmpeg refuses an empty input, which lost every other segment's
+// music. With nothing but empty segments, there is no audio
+func TestStop_LeavesEmptySegmentsOut(t *testing.T) {
+	var inputs []string
+	mix := func(args []string) error {
+		for i, a := range args {
+			if a == "-i" {
+				inputs = append(inputs, filepath.Base(args[i+1]))
+			}
+		}
+		return os.WriteFile(args[len(args)-1], []byte("ogg"), 0o644)
+	}
+	r := NewRecorder(t.TempDir(), &keysUploader{}, mix)
+	require.NoError(t, r.Start("42", 0))
+	require.NoError(t, r.Chunk("42", "tab", 0, 0, 0, false, nil))
+	require.NoError(t, r.Chunk("42", "tab", 1, 0, 5000, false, []byte("webm")))
+	key, err := r.Stop("42")
+	require.NoError(t, err)
+	assert.Equal(t, "42.ogg", key)
+	assert.Equal(t, []string{"seg-1.webm"}, inputs)
+
+	require.NoError(t, r.Start("43", 0))
+	require.NoError(t, r.Chunk("43", "tab", 0, 0, 0, false, []byte{}))
+	_, err = r.Stop("43")
+	assert.ErrorIs(t, err, ErrNoAudio)
+}
