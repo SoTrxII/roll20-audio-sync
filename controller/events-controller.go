@@ -13,14 +13,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// A MediaRecorder chunk is 5s of opus, ~80 KB. 10 MB leaves room for a
-// stalled tab flushing a backlog in one go, and caps what a stranger can push
+// A MediaRecorder chunk is 5s of opus, ~80 KB, ~0.4 MB with the tab's picture.
+// 10 MB leaves room for a stalled tab flushing a backlog in one go, and caps
+// what a stranger can push
 const maxChunkBytes = 10 << 20
 
 type Capturer interface {
 	Start(id string, alignTo int64) error
-	IsRecording(id string) bool
-	Chunk(id string, seg, seq int, startedAt int64, data []byte) error
+	Status(id, client string) (recording, capturedElsewhere bool)
+	Chunk(id, client string, seg, seq int, startedAt int64, video bool, data []byte) error
 	Stop(id string) (string, error)
 }
 
@@ -89,12 +90,16 @@ func (cc *CaptureController) Time(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"now": time.Now().UnixMilli()})
 }
 
+// Status is what Lullaby polls to remind the GM to record: client is the asking
+// tab, so that it is not told to stay away from its own capture
 func (cc *CaptureController) Status(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"recording": cc.rec.IsRecording(c.Param("id"))})
+	recording, elsewhere := cc.rec.Status(c.Param("id"), c.Query("client"))
+	c.JSON(http.StatusOK, gin.H{"recording": recording, "capturedElsewhere": elsewhere})
 }
 
 // Chunk answers 409 when there's no recording (never started, or /session end
-// came first): Lullaby stops capturing. 400 is a sequence it can't recover in
+// came first): Lullaby stops capturing. 423 is another tab already capturing
+// this game: it stops too, and says why. 400 is a sequence it can't recover in
 // the same segment: it starts a new one
 func (cc *CaptureController) Chunk(c *gin.Context) {
 	id := c.Param("id")
@@ -116,9 +121,12 @@ func (cc *CaptureController) Chunk(c *gin.Context) {
 		return
 	}
 
-	switch err := cc.rec.Chunk(id, seg, seq, startedAt, data); {
+	// video=1: the chunk holds the tab's picture too
+	switch err := cc.rec.Chunk(id, c.Query("client"), seg, seq, startedAt, c.Query("video") == "1", data); {
 	case errors.Is(err, capture.ErrNotRecording):
 		c.String(http.StatusConflict, err.Error())
+	case errors.Is(err, capture.ErrCapturedElsewhere):
+		c.String(http.StatusLocked, err.Error())
 	case errors.Is(err, capture.ErrOutOfOrder):
 		c.String(http.StatusBadRequest, err.Error())
 	case err != nil:
